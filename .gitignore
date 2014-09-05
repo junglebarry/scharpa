@@ -1,0 +1,10 @@
+target/
+dist/
+project/sbt-launch-*.jar
+.DS_Store
+*.log
+logs/
+*.pyc
+bin/
+tmp/
+.vagrant
