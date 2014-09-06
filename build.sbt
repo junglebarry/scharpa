@@ -1,6 +1,6 @@
-name := "simplechartparser"
+name := "scharpa"
 
-version := "0.1"
+version := "0.2"
 
 scalaVersion := "2.11.2"
 
