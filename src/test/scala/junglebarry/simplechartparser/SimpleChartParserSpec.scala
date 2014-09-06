@@ -4,12 +4,53 @@ import org.scalatest._
 
 class SimpleChartParserSpec extends FlatSpec with Matchers {
 
+  "Rule.nextSymbol" should "be the first symbol on the RHS" in new SimpleGrammar {
+    the.nextSymbol should be(Some("the"))
+    cat.nextSymbol should be(Some("cat"))
+    s1.nextSymbol should be(Some("NP"))
+  }
+
+  "Rule.nextSymbolIs" should "be true only for the first symbol on the RHS" in new SimpleGrammar {
+    the.nextSymbolIs("the") should be(true)
+    the.nextSymbolIs("cat") should be(false)
+    s1.nextSymbolIs("NP") should be(true)
+    s1.nextSymbolIs("S") should be(false)
+  }
+
   "WordArc" should "always be passive" in {
     WordArc(0, 1, "the").active should be(false)
   }
 
   it should "not be extensible through the fundamental rule" in {
     WordArc(0, 1, "the").applyFundamental(WordArc(1, 2, "cat")) should be(None)
+  }
+
+  "RuleArc.active" should "be true when the rule has more RHS nodes to process" in new SimpleGrammar {
+    RuleArc(0, 0, RuleApplication(the, 0)).active should be(true)
+    RuleArc(0, 0, RuleApplication(s2, 0)).active should be(true)
+    RuleArc(0, 1, RuleApplication(s2, 1)).active should be(true)
+    RuleArc(0, 2, RuleApplication(s2, 2)).active should be(true)
+  }
+
+  it should "be false when the rule has no more RHS nodes to process" in new SimpleGrammar {
+    RuleArc(0, 1, RuleApplication(the, 1)).active should be(false)
+    RuleArc(0, 3, RuleApplication(s2, 3)).active should be(false)
+  }
+
+  "RuleArc.applyFundamental" should "return None when the node is passive (it cannot be extended)" in new SimpleGrammar {
+    RuleArc(0, 1, RuleApplication(the, 1)).applyFundamental(WordArc(0, 1, "the")) should be(None)
+  }
+
+  it should "return None when the hypothesised arc does not occur in the next position" in new SimpleGrammar {
+    RuleArc(0, 0, RuleApplication(the, 0)).applyFundamental(WordArc(1, 2, "the")) should be(None)
+  }
+
+  it should "return None when the hypothesised arc does not have a matching symbol" in new SimpleGrammar {
+    RuleArc(0, 0, RuleApplication(the, 0)).applyFundamental(WordArc(0, 1, "cat")) should be(None)
+  }
+
+  it should "return an extended arc when the conditions are met (right symbol, right index)" in new SimpleGrammar {
+    RuleArc(0, 0, RuleApplication(the, 0)).applyFundamental(WordArc(0, 1, "the")) should be(Some(RuleArc(0, 1, RuleApplication(the, 1))))
   }
 
   "BFBUParser.parse" should "contain the original word arcs" in new TheCatSat {

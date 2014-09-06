@@ -16,7 +16,7 @@ package object simplechartparser {
    */
   case class Rule(lhs: String, rhsHead: String, rhsTail: String*) extends HasRHS {
     lazy val rhs: Seq[String] = rhsHead +: rhsTail.toSeq
-    def nextSymbol: Option[String] = rhs.headOption
+    override lazy val nextSymbol: Option[String] = rhs.headOption
   }
 
   /** A grammar is a set of rules **/
@@ -133,8 +133,7 @@ package object simplechartparser {
     /** Initialise the agenda with one WordArc for each word in the sentence **/
     def initialise(grammar: Grammar)(sentence: Seq[String]): State = {
       val agenda = sentence.zipWithIndex.map {
-        case (word, index) =>
-          WordArc(index, index + 1, word)
+        case (word, index) => WordArc(index, index + 1, word)
       }
       State(agenda, Chart(Set.empty[Arc]))
     }
