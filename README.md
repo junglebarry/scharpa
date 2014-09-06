@@ -3,7 +3,7 @@ scharpa [![Build Status](https://travis-ci.org/junglebarry/scharpa.svg?branch=ma
 
 A simple Scala implementation of *active chart parsing* with context-free grammars.
 
-The implementation is loosely based on [this course](http://cs.union.edu/~striegnk/courses/nlp-with-prolog/html/index.html), but is extended to allow different agendas and strategies. This is not intended as a wide-coverage, robust, or high-performance parser; rather, it is an implementation of an efficient and flexible algorithm for dealing with formal languages and limited-domain natural language.
+The implementation is loosely based on [this course](http://cs.union.edu/~striegnk/courses/nlp-with-prolog/html/index.html), but is extended to allow different agendas and strategies as per [Neil K. Simpkins and Peter Hancox (1990) Chart parsing in Prolog. New Generation Computing 8(2), pp. 113-138.](http://www.cs.bham.ac.uk/~pjh/publications/ngc_90.pdf). This is not intended as a wide-coverage, robust, or high-performance parser; rather, it is an implementation of an efficient and flexible algorithm for dealing with formal languages and limited-domain natural language.
 
 ## Parsing
 
