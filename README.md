@@ -9,22 +9,28 @@ The implementation is loosely based on [this course](http://cs.union.edu/~strieg
 
 Parsing is the process of deriving a phrase-structure analysis of some input text according to a given grammar. This project considers only context-free grammars, with rules of the form:
 
-  LHS -> RHS1, RHS2, ..., RHSn
+```Prolog
+LHS -> RHS1, RHS2, ..., RHSn
+```
 
 where a single symbol on the left-hand side (LHS) can be expanded into a (non-empty) sequence of symbols on the right-hand side (RHS). Each `RHSi` from the right-hand side can act as the left-hand-side of another rule in the grammar.
 
 A prototypical example of such a grammar is:
 
-  S -> NP VP
-  NP -> DET N
-  DET -> "the"
-  N -> "cat"
-  VP -> V
-  V -> "sat"
+```Prolog
+S -> NP VP
+NP -> DET N
+DET -> "the"
+N -> "cat"
+VP -> V
+V -> "sat"
+```
 
 and parsing the sentence "the cat sat" would yield the following phrase-structure analysis (warning: S-expressions follow):
 
-  (S (NP (DET "the") (N "cat")) (VP (V "sat")))
+```Scheme
+(S (NP (DET "the") (N "cat")) (VP (V "sat")))
+```
 
 Parsing can be viewed as a search through the space of possible analyses for the one (or many) that best explain the observed sentence. Of course, it's entirely possible that the given grammar doesn't describe what might intuitively appear to be a perfectly valid sentence.
 
@@ -69,7 +75,9 @@ Chart parsers can be customised to search through hypothesised analyses in a cho
 
 The `ChartParser` is agnostic to search order, so leaves a abstract method:
 
-  def nextAgenda(old: Seq[Arc], additions: Seq[Arc]): Seq[Arc]
+```scala
+def nextAgenda(old: Seq[Arc], additions: Seq[Arc]): Seq[Arc]
+```
 
 to be implemented to control the order of search. Two naïve search implementations are `TopDownChartParser` and `BreadthFirstChartParser`.
 
@@ -82,9 +90,10 @@ There are two major strategies for parsing:
 
 These strategies are relevant when initialising the `Chart` and `Agenda`, and when expanding an `Arc` from the agenda. The chart parsing algorithm is agnostic to the strategies, so our `ChartParser` type leaves unspecified two methods:
 
-  def initialise(grammar: Grammar)(sentence: Seq[String]): State
+```scala
+def initialise(grammar: Grammar)(sentence: Seq[String]): State
 
-  def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
-
+def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
+```
 for defining the strategy. Two existing strategies are defined as `BottomUpChartParser` and `TopDownChartParser`.
 
