@@ -40,6 +40,10 @@ package object scharpa {
     lazy val rulesByFirstRhs: Map[String, Set[Rule]] = rules.filter(_.nextSymbol.isDefined).groupBy(_.nextSymbol.get)
   }
 
+  /**
+   * The application of a rule. Wraps the rule up with a tracking index to count how many
+   * symbols from the RHS have been successfully applied already.
+   */
   case class RuleApplication(rule: Rule, applied: Int = 0) extends HasRHS {
     lazy val active: Boolean = rule.rhs.size > applied
 
@@ -102,7 +106,7 @@ package object scharpa {
   }
 
   case class Chart(arcs: Set[Arc]) {
-    def extend(arc: Arc): (Chart, Seq[Arc]) = {
+    def nextChart(arc: Arc): (Chart, Seq[Arc]) = {
       val fundamentals =
         if (arc.active) {
           // new arc active; attempt to extend with passive rules on chart
@@ -116,8 +120,11 @@ package object scharpa {
     }
   }
 
-  case class State(agenda: Seq[Arc], chart: Chart)
+  case class ParserState(agenda: Seq[Arc], chart: Chart)
 
+  /**
+   * Basic Chart parser, leaving abstract the methods for defining agenda extension.
+   */
   trait ChartParser {
 
     def parse(grammar: Grammar)(sentence: Seq[String]): Chart = {
@@ -125,21 +132,21 @@ package object scharpa {
     }
 
     @tailrec
-    private final def extend(state: State, grammar: Grammar): Chart = state match {
-      case State(Seq(), chart) => chart
-      case State(Seq(arc, arcs @ _*), chart) =>
+    private final def extend(state: ParserState, grammar: Grammar): Chart = state match {
+      case ParserState(Seq(), chart) => chart
+      case ParserState(Seq(arc, arcs @ _*), chart) =>
         // arcs from extending existing graph nodes
-        val (newChart, extendedArcs) = chart.extend(arc)
+        val (newChart, extendedArcs) = chart.nextChart(arc)
         // arcs from new rules
         val newArcs = generateNewArcs(grammar)(arc)
         // generate the next agenda
         val newAgenda = nextAgenda(arcs, extendedArcs ++ newArcs.toSet)
         // recurse
-        extend(State(newAgenda, newChart), grammar)
+        extend(ParserState(newAgenda, newChart), grammar)
     }
 
     /** Implement these to define the policy - bottom-up or top-down **/
-    def initialise(grammar: Grammar)(sentence: Seq[String]): State
+    def initialise(grammar: Grammar)(sentence: Seq[String]): ParserState
 
     def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
 
@@ -147,13 +154,16 @@ package object scharpa {
     def nextAgenda(old: Seq[Arc], additions: Seq[Arc]): Seq[Arc]
   }
 
+  /**
+   * Starts with words and proceeds to find covering rules until it reaches the TOP symbol.
+   */
   trait BottomUpChartParser extends ChartParser {
     /** Initialise the agenda with one WordArc for each word in the sentence **/
-    def initialise(grammar: Grammar)(sentence: Seq[String]): State = {
+    def initialise(grammar: Grammar)(sentence: Seq[String]): ParserState = {
       val agenda = sentence.zipWithIndex.map {
         case (word, index) => WordArc(index, index + 1, word)
       }
-      State(agenda, Chart(Set.empty[Arc]))
+      ParserState(agenda, Chart(Set.empty[Arc]))
     }
 
     /**
@@ -167,16 +177,19 @@ package object scharpa {
     }
   }
 
+  /**
+   * Starts with the TOP symbol, and proceeds to expand down to the words
+   */
   trait TopDownChartParser extends ChartParser {
     /** Initialise the agenda with one RuleArc for the top symbol **/
-    def initialise(grammar: Grammar)(sentence: Seq[String]): State = {
+    def initialise(grammar: Grammar)(sentence: Seq[String]): ParserState = {
       // all words to be added to the chart
       val chartWordArcs: Set[Arc] = sentence.zipWithIndex.map {
         case (word, index) => WordArc(index, index + 1, word)
       }.toSet
       // top-down starting rule added to agenda
       val agenda = Seq(RuleArc(0, 0, RuleApplication(grammar.top)))
-      State(agenda, Chart(chartWordArcs))
+      ParserState(agenda, Chart(chartWordArcs))
     }
 
     /**
@@ -184,6 +197,7 @@ package object scharpa {
      * grammar rules are selected if their LHS symbol is the next symbol for the Arc.
      */
     def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = arc match {
+      // only active arcs can be extended into new Arcs
       case RuleArc(start, end, rule) if rule.active =>
         grammar.rulesByLhs.get(rule.nextSymbol.get).getOrElse(Set.empty[Rule]).map { rule =>
           RuleArc(end, end, RuleApplication(rule))
