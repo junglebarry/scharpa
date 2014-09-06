@@ -1,4 +1,4 @@
-package junglebarry.simplechartparser
+package junglebarry.scharpa
 
 import org.scalatest._
 

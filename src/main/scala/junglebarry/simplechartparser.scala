@@ -2,7 +2,7 @@ package junglebarry
 
 import scala.annotation.tailrec
 
-package object simplechartparser {
+package object scharpa {
 
   trait HasRHS {
     def nextSymbol: Option[String]
