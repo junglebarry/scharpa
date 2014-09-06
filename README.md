@@ -3,7 +3,7 @@ scharpa [![Build Status](https://travis-ci.org/junglebarry/scharpa.svg?branch=ma
 
 Scharpa is a Scala implementation of *active chart parsing* with context-free grammars.
 
-The implementation is loosely based on Peter Hancox's [Prolog implementations of active chart parsing][simpkins-hancox_90_chart-parsing], including generalisation to allow different agenda processing policies and directional strategies. It also makes some recourse to [this course][blackburn-striegnitz2002nlp-prolog]. 
+The implementation is loosely based on Peter Hancox's courses on Natural Language Processing in Prolog, but the closest reference is [this paper][simpkins-hancox_90_chart-parsing]. This covers generalisation to allow different agenda processing policies and directional strategies. Our implementation also makes some recourse to [this course][blackburn-striegnitz2002nlp-prolog]. 
 
 Scharpa is not intended as a wide-coverage, robust, or high-performance parser; rather, it is an implementation of an efficient and flexible algorithm for dealing with formal languages and limited-domain natural language. In particular, the bottom-up features of chart parsing are useful where complete parses cannot be recovered.
 
@@ -100,6 +100,9 @@ def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
 Two existing strategies are provided: `BottomUpChartParser` and `TopDownChartParser`.
 
 ## References
+
+* [Neil K. Simpkins and Peter Hancox (1990) Chart parsing in Prolog. New Generation Computing 8(2), pp. 113-138.][simpkins-hancox_90_chart-parsing]
+* [Patrick Blackburn and Kristina Striegnitz (2002) Natural Language Processing Techniques in Prolog][blackburn-striegnitz2002nlp-prolog]
 
 [simpkins-hancox_90_chart-parsing]: http://www.cs.bham.ac.uk/~pjh/publications/ngc_90.pdf  "Neil K. Simpkins and Peter Hancox (1990) Chart parsing in Prolog. New Generation Computing 8(2), pp. 113-138."
 [blackburn-striegnitz2002nlp-prolog]: http://cs.union.edu/~striegnk/courses/nlp-with-prolog/html/index.html "Patrick Blackburn and Kristina Striegnitz (2002) Natural Language Processing Techniques in Prolog"
