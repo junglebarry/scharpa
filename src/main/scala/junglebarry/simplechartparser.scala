@@ -10,18 +10,34 @@ package object simplechartparser {
     def nextSymbolIs(symbol: String): Boolean = { nextSymbol.exists(_ == symbol) }
   }
 
+  sealed trait Rule extends HasRHS {
+    def lhs: String
+    def rhs: Seq[String]
+  }
+
+  /**
+   * The TopRule is a single rule singled out as the topmost node of the grammar.
+   */
+  case class TopRule(rhsOnly: String, topSymbol: String = "^TOP^") extends Rule {
+    override val lhs = topSymbol
+    lazy val rhs: Seq[String] = Seq(rhsOnly)
+    override lazy val nextSymbol: Option[String] = rhs.headOption
+  }
+
   /**
    * Rules are context-free grammar rules, which have a single left-hand-side entry,
    * and expand to one or more right-hand-side entries (enforced by type).
    */
-  case class Rule(lhs: String, rhsHead: String, rhsTail: String*) extends HasRHS {
+  case class SimpleRule(lhs: String, rhsHead: String, rhsTail: String*) extends Rule {
     lazy val rhs: Seq[String] = rhsHead +: rhsTail.toSeq
     override lazy val nextSymbol: Option[String] = rhs.headOption
   }
 
-  /** A grammar is a set of rules **/
-  case class Grammar(rules: Set[Rule]) {
-    lazy val rulesLookup: Map[String, Set[Rule]] = rules.filter(_.nextSymbol.isDefined).groupBy(_.nextSymbol.get)
+  /** A grammar is a set of rules, with an optional Top rule (for top-down traversal) **/
+  case class Grammar(ruleset: Set[Rule], top: TopRule) {
+    lazy val rules: Set[Rule] = ruleset + top
+    lazy val rulesByLhs: Map[String, Set[Rule]] = rules.groupBy(_.lhs)
+    lazy val rulesByFirstRhs: Map[String, Set[Rule]] = rules.filter(_.nextSymbol.isDefined).groupBy(_.nextSymbol.get)
   }
 
   case class RuleApplication(rule: Rule, applied: Int = 0) extends HasRHS {
@@ -41,7 +57,7 @@ package object simplechartparser {
    * - has a symbol, descibing the left-hand-side of the applied rule
    * - may be extended by applying the fundamental rule (if certain conditions are met)
    */
-  trait Arc {
+  sealed trait Arc {
     def start: Int
     def end: Int
     def symbol: String
@@ -104,20 +120,14 @@ package object simplechartparser {
 
   trait ChartParser {
 
-    def initialise(grammar: Grammar)(sentence: Seq[String]): State
-
     def parse(grammar: Grammar)(sentence: Seq[String]): Chart = {
       extend(initialise(grammar)(sentence), grammar)
     }
 
-    def nextAgenda(old: Seq[Arc], additions: Seq[Arc]): Seq[Arc]
-
-    def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
-
     @tailrec
     private final def extend(state: State, grammar: Grammar): Chart = state match {
       case State(Seq(), chart) => chart
-      case State(arc :: arcs, chart) =>
+      case State(Seq(arc, arcs @ _*), chart) =>
         // arcs from extending existing graph nodes
         val (newChart, extendedArcs) = chart.extend(arc)
         // arcs from new rules
@@ -127,6 +137,14 @@ package object simplechartparser {
         // recurse
         extend(State(newAgenda, newChart), grammar)
     }
+
+    /** Implement these to define the policy - bottom-up or top-down **/
+    def initialise(grammar: Grammar)(sentence: Seq[String]): State
+
+    def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
+
+    /** Implement this to define the agenda-handling strategy (e.g. breadth- or depth-first) **/
+    def nextAgenda(old: Seq[Arc], additions: Seq[Arc]): Seq[Arc]
   }
 
   trait BottomUpChartParser extends ChartParser {
@@ -143,9 +161,34 @@ package object simplechartparser {
      * grammar rules are selected if their first RHS symbol is that required by the Arc.
      */
     def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = {
-      grammar.rulesLookup.get(arc.symbol).getOrElse(Set.empty[Rule]).flatMap { rule =>
+      grammar.rulesByFirstRhs.get(arc.symbol).getOrElse(Set.empty[Rule]).flatMap { rule =>
         RuleArc(arc.start, arc.start, RuleApplication(rule)).applyFundamental(arc)
       }
+    }
+  }
+
+  trait TopDownChartParser extends ChartParser {
+    /** Initialise the agenda with one RuleArc for the top symbol **/
+    def initialise(grammar: Grammar)(sentence: Seq[String]): State = {
+      // all words to be added to the chart
+      val chartWordArcs: Set[Arc] = sentence.zipWithIndex.map {
+        case (word, index) => WordArc(index, index + 1, word)
+      }.toSet
+      // top-down starting rule added to agenda
+      val agenda = Seq(RuleArc(0, 0, RuleApplication(grammar.top)))
+      State(agenda, Chart(chartWordArcs))
+    }
+
+    /**
+     * New arcs are generated top-down:
+     * grammar rules are selected if their LHS symbol is the next symbol for the Arc.
+     */
+    def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = arc match {
+      case RuleArc(start, end, rule) if rule.active =>
+        grammar.rulesByLhs.get(rule.nextSymbol.get).getOrElse(Set.empty[Rule]).map { rule =>
+          RuleArc(end, end, RuleApplication(rule))
+        }
+      case _ => Set.empty[Arc]
     }
   }
 
@@ -154,6 +197,11 @@ package object simplechartparser {
     def nextAgenda(old: Seq[Arc], newArcs: Seq[Arc]) = old ++ newArcs
   }
 
-  trait BFBUChartParser extends BottomUpChartParser with BreadthFirstChartParser
+  /** Depth-first - it's a stack **/
+  trait DepthFirstChartParser extends ChartParser {
+    def nextAgenda(old: Seq[Arc], newArcs: Seq[Arc]) = newArcs ++ old
+  }
 
+  trait BFBUChartParser extends BottomUpChartParser with BreadthFirstChartParser
+  trait DFTDChartParser extends TopDownChartParser with DepthFirstChartParser
 }
