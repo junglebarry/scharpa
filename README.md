@@ -79,7 +79,7 @@ The `ChartParser` is agnostic to search order, so leaves a abstract method:
 def nextAgenda(old: Seq[Arc], additions: Seq[Arc]): Seq[Arc]
 ```
 
-to be implemented to control the order of search. Two naïve search implementations are `TopDownChartParser` and `BreadthFirstChartParser`.
+Two naïve agenda implementations are provided: `DepthFirstChartParser` and `BreadthFirstChartParser`.
 
 ## Strategies
 
@@ -95,5 +95,5 @@ def initialise(grammar: Grammar)(sentence: Seq[String]): State
 
 def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
 ```
-for defining the strategy. Two existing strategies are defined as `BottomUpChartParser` and `TopDownChartParser`.
+Two existing strategies are provided: `BottomUpChartParser` and `TopDownChartParser`.
 
