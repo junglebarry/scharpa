@@ -1,19 +1,21 @@
 scharpa [![Build Status](https://travis-ci.org/junglebarry/scharpa.svg?branch=master)](https://travis-ci.org/junglebarry/scharpa)
 =================
 
-A simple Scala implementation of *active chart parsing* with context-free grammars.
+Scharpa is a Scala implementation of *active chart parsing* with context-free grammars.
 
-The implementation is loosely based on [this course](http://cs.union.edu/~striegnk/courses/nlp-with-prolog/html/index.html), but is extended to allow different agendas and strategies as per [Neil K. Simpkins and Peter Hancox (1990) Chart parsing in Prolog. New Generation Computing 8(2), pp. 113-138.](http://www.cs.bham.ac.uk/~pjh/publications/ngc_90.pdf). This is not intended as a wide-coverage, robust, or high-performance parser; rather, it is an implementation of an efficient and flexible algorithm for dealing with formal languages and limited-domain natural language.
+The implementation is loosely based on Peter Hancox's [Prolog implementations of active chart parsing][simpkins-hancox_90_chart-parsing], including generalisation to allow different agenda processing policies and directional strategies. It also makes some recourse to [this course][blackburn-striegnitz2002nlp-prolog]. 
+
+Scharpa is not intended as a wide-coverage, robust, or high-performance parser; rather, it is an implementation of an efficient and flexible algorithm for dealing with formal languages and limited-domain natural language. In particular, the bottom-up features of chart parsing are useful where complete parses cannot be recovered.
 
 ## Parsing
 
-Parsing is the process of deriving a phrase-structure analysis of some input text according to a given grammar. This project considers only context-free grammars, with rules of the form:
+Parsing is the process of deriving a phrase-structure analysis of some input text according to a given grammar. This project considers only context-free grammars, with rules in [Backus-Naur Form]( http://en.wikipedia.org/wiki/Backus%E2%80%93Naur_Form):
 
 ```Prolog
 LHS -> RHS1, RHS2, ..., RHSn
 ```
 
-where a single symbol on the left-hand side (LHS) can be expanded into a (non-empty) sequence of symbols on the right-hand side (RHS). Each `RHSi` from the right-hand side can act as the left-hand-side of another rule in the grammar.
+Here, there is a single symbol on the left-hand side (LHS) that can be expanded into a (non-empty) sequence of symbols on the right-hand side (RHS). Each `RHSi` from the right-hand side can act as the left-hand-side of another rule in the grammar.
 
 A prototypical example of such a grammar is:
 
@@ -36,7 +38,7 @@ Parsing can be viewed as a search through the space of possible analyses for the
 
 The *parsing as search* viewpoint is important for what follows. There are a few reasons of particular relevance here.
 
-First, context-free grammars allow recursive rules, so a naïve top-down search could recursively expand rules of the form `A -> A B`, leaving it in an infinite recursion (see: *[left recursion](http://en.wikipedia.org/wiki/Left_recursion)*). 
+First, context-free grammars allow recursive rules of the form `A -> A B`, which could cause a naïve top-down search to enter infinite [left recursion](http://en.wikipedia.org/wiki/Left_recursion).
 
 Second, a common mechanism for searching through a space of possibilities is to use backtracking to consider alternative expansions, which can lead to wasteful recomputation.
 
@@ -85,8 +87,8 @@ Two naïve agenda implementations are provided: `DepthFirstChartParser` and `Bre
 
 There are two major strategies for parsing: 
 
-* *top-down* starts with a special rule in the grammar, called the *top node*, and attempts to expand it to meet the words of the sentence.
-* *bottom-up* starts with the words of the sentence, and attempts to find rules that cover them until it reaches the *top-node*.
+* **top-down** starts with a special rule in the grammar, called the *top node*, and attempts to expand it to meet the words of the sentence.
+* **bottom-up** starts with the words of the sentence, and attempts to find rules that cover them until it reaches the *top-node*.
 
 These strategies are relevant when initialising the `Chart` and `Agenda`, and when expanding an `Arc` from the agenda. The chart parsing algorithm is agnostic to the strategies, so our `ChartParser` type leaves unspecified two methods:
 
@@ -97,3 +99,7 @@ def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
 ```
 Two existing strategies are provided: `BottomUpChartParser` and `TopDownChartParser`.
 
+## References
+
+[simpkins-hancox_90_chart-parsing]: http://www.cs.bham.ac.uk/~pjh/publications/ngc_90.pdf  "Neil K. Simpkins and Peter Hancox (1990) Chart parsing in Prolog. New Generation Computing 8(2), pp. 113-138."
+[blackburn-striegnitz2002nlp-prolog]: http://cs.union.edu/~striegnk/courses/nlp-with-prolog/html/index.html "Patrick Blackburn and Kristina Striegnitz (2002) Natural Language Processing Techniques in Prolog"
