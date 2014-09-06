@@ -4,6 +4,14 @@ import org.scalatest._
 
 class SimpleChartParserSpec extends FlatSpec with Matchers {
 
+  "WordArc" should "always be passive" in {
+    WordArc(0, 1, "the").active should be(false)
+  }
+
+  it should "not be extensible through the fundamental rule" in {
+    WordArc(0, 1, "the").applyFundamental(WordArc(1, 2, "cat")) should be(None)
+  }
+
   "BFBUParser.parse" should "contain the original word arcs" in new TheCatSat {
     chart.arcs should (
       be('nonEmpty) and
