@@ -99,6 +99,35 @@ def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc]
 ```
 Two existing strategies are provided: `BottomUpChartParser` and `TopDownChartParser`.
 
+## Examples
+
+See [the tests](https://github.com/junglebarry/scharpa/blob/master/src/test/scala/junglebarry/scharpa/SimpleChartParserSpec.scala) for examples of how to construct a simple grammar and apply the parser.
+
+```scala
+  // construct a grammar
+  val the = SimpleRule("Det", "the")
+  val cat = SimpleRule("N", "cat")
+  val dog = SimpleRule("N", "dog")
+  val sat = SimpleRule("V", "sat")
+  val np = SimpleRule("NP", "Det", "N")
+  val vp = SimpleRule("VP", "V")
+  val s = SimpleRule("S", "NP", "VP")
+  val rules = Set[Rule](the, cat, dog, sat, np, vp, s)
+  val top = TopRule("S")
+  val grammar = new Grammar(rules, top)
+
+  // build a parser - this one is bottom-up, breadth first
+  val parser = new BottomUpChartParser with BreadthFirstChartParser {}
+
+  // apply to a sentence
+  val chart = parser.parse(grammar)(Seq("the", "cat", "sat"))
+
+  // print the chart
+  println("=== Complete chart ===")
+  chart.chart.foreach(println)
+  println("======================")
+```
+
 ## References
 
 * [Neil K. Simpkins and Peter Hancox (1990) Chart parsing in Prolog. New Generation Computing 8(2), pp. 113-138.][simpkins-hancox_90_chart-parsing]
