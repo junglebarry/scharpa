@@ -122,7 +122,13 @@ See [the tests](https://github.com/junglebarry/scharpa/blob/master/src/test/scal
   // apply to a sentence
   val chart = parser.parse(grammar)(Seq("the", "cat", "sat"))
 
-  // print the chart
+  // select only passive nodes matching complete parses
+  val complete = ChartParser.passiveNodes(chart, top.lhs)
+
+  // print S-expression readouts for complete nodes
+  complete.map(ChartParser.readout(_)).foreach(println)
+
+  // print the entire chart
   println("=== Complete chart ===")
   chart.chart.foreach(println)
   println("======================")

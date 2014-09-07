@@ -18,7 +18,7 @@ package object scharpa {
   /**
    * The TopRule is a single rule singled out as the topmost node of the grammar.
    */
-  case class TopRule(rhsOnly: String, topSymbol: String = "^TOP^") extends Rule {
+  case class TopRule(rhsOnly: String, topSymbol: String = "ROOT") extends Rule {
     override val lhs = topSymbol
     lazy val rhs: Seq[String] = Seq(rhsOnly)
     override lazy val nextSymbol: Option[String] = rhs.headOption
@@ -44,12 +44,16 @@ package object scharpa {
    * The application of a rule. Wraps the rule up with a tracking index to count how many
    * symbols from the RHS have been successfully applied already.
    */
-  case class RuleApplication(rule: Rule, applied: Int = 0) extends HasRHS {
+  case class RuleApplication(rule: Rule, subarcs: Seq[Arc] = Seq.empty[Arc], applied: Int = 0) extends HasRHS {
     lazy val active: Boolean = rule.rhs.size > applied
 
     lazy val (seen, remaining) = rule.rhs.splitAt(applied)
 
     override lazy val nextSymbol: Option[String] = remaining.headOption
+
+    def extendWith(arc: Arc): Option[RuleApplication] = if (nextSymbolIs(arc.symbol)) {
+      Some(RuleApplication(rule, subarcs :+ arc, applied + 1))
+    } else None
 
     override def toString = s"""${rule.lhs} --> ${seen.mkString(" ")} • ${remaining.mkString(" ")}"""
   }
@@ -98,25 +102,27 @@ package object scharpa {
      * [2] This arc is active;
      * [3] This arc has the symbol of the proposed arc, next.
      */
-    def applyFundamental(arc: Arc): Option[Arc] = {
-      if (arc.start == end && rule.nextSymbolIs(arc.symbol)) {
-        Some(RuleArc(start, arc.end, rule.copy(applied = rule.applied + 1)))
-      } else None
-    }
+    def applyFundamental(arc: Arc): Option[Arc] = if (arc.start == end) {
+      rule.extendWith(arc).map(RuleArc(start, arc.end, _))
+    } else None
   }
 
   case class Chart(arcs: Set[Arc]) {
     def nextChart(arc: Arc): (Chart, Seq[Arc]) = {
-      val fundamentals =
-        if (arc.active) {
-          // new arc active; attempt to extend with passive rules on chart
-          arcs.filterNot(_.active).flatMap(arc.applyFundamental(_))
-        } else {
-          // new arc passive; attempt to extend any active rules from chart with new arc
-          arcs.filter(_.active).flatMap(_.applyFundamental(arc))
-        }
-      // return chart with new arc added; also, new arcs to be added to next agenda
-      (Chart(arcs + arc), fundamentals.toSeq)
+      if (arcs(arc)) {
+        (this, Seq.empty[Arc])
+      } else {
+        val fundamentals =
+          if (arc.active) {
+            // new arc active; attempt to extend with passive rules on chart
+            arcs.filterNot(_.active).flatMap(arc.applyFundamental(_))
+          } else {
+            // new arc passive; attempt to extend any active rules from chart with new arc
+            arcs.filter(_.active).flatMap(_.applyFundamental(arc))
+          }
+        // return chart with new arc added; also, new arcs to be added to next agenda
+        (Chart(arcs + arc), fundamentals.toSeq)
+      }
     }
   }
 
@@ -140,7 +146,7 @@ package object scharpa {
         // arcs from new rules
         val newArcs = generateNewArcs(grammar)(arc)
         // generate the next agenda
-        val newAgenda = nextAgenda(arcs, extendedArcs ++ newArcs.toSet)
+        val newAgenda = nextAgenda(arcs, (extendedArcs ++ newArcs).distinct)
         // recurse
         extend(ParserState(newAgenda, newChart), grammar)
     }
@@ -152,6 +158,20 @@ package object scharpa {
 
     /** Implement this to define the agenda-handling strategy (e.g. breadth- or depth-first) **/
     def nextAgenda(old: Seq[Arc], additions: Seq[Arc]): Seq[Arc]
+  }
+
+  object ChartParser {
+    /** Generate an S-expression readout of the phrase-structure **/
+    def readout(arc: Arc): String = arc match {
+      case ra: RuleArc =>
+        s"""(${ra.symbol} ${ra.rule.subarcs.map(readout(_)).mkString(" ")})"""
+      case a => a.symbol
+    }
+
+    /** Select all active nodes, filtered by symbol **/
+    def passiveNodes(chart: Chart, symbol: String): Set[Arc] = {
+      chart.arcs.filter { arc => arc.symbol == symbol && !arc.active }
+    }
   }
 
   /**
@@ -170,11 +190,11 @@ package object scharpa {
      * New arcs are generated bottom-up:
      * grammar rules are selected if their first RHS symbol is that required by the Arc.
      */
-    def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = {
+    def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = if (!arc.active) {
       grammar.rulesByFirstRhs.get(arc.symbol).getOrElse(Set.empty[Rule]).flatMap { rule =>
         RuleArc(arc.start, arc.start, RuleApplication(rule)).applyFundamental(arc)
       }
-    }
+    } else { Set.empty[Arc] }
   }
 
   /**
