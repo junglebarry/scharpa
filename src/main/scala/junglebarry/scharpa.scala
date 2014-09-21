@@ -129,7 +129,7 @@ package object scharpa {
     } else None
   }
 
-  case class Chart(arcs: Set[Arc]) {
+  case class Chart(arcs: Set[Arc], sentence: Seq[String]) {
     def nextChart(arc: Arc): (Chart, Seq[Arc]) = {
       if (arcs(arc)) {
         (this, Seq.empty[Arc])
@@ -143,7 +143,7 @@ package object scharpa {
             arcs.filter(_.active).flatMap(_.applyFundamental(arc))
           }
         // return chart with new arc added; also, new arcs to be added to next agenda
-        (Chart(arcs + arc), fundamentals.toSeq)
+        (Chart(arcs + arc, sentence), fundamentals.toSeq)
       }
     }
   }
@@ -205,7 +205,7 @@ package object scharpa {
       val agenda = sentence.zipWithIndex.map {
         case (word, index) => WordArc(index, index + 1, word)
       }
-      ParserState(agenda, Chart(Set.empty[Arc]))
+      ParserState(agenda, Chart(Set.empty[Arc], sentence))
     }
 
     /**
@@ -231,7 +231,7 @@ package object scharpa {
       }.toSet
       // top-down starting rule added to agenda
       val agenda = Seq(RuleArc(0, 0, RuleApplication(grammar.top)))
-      ParserState(agenda, Chart(chartWordArcs))
+      ParserState(agenda, Chart(chartWordArcs, sentence))
     }
 
     /**
