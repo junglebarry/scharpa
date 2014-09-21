@@ -15,11 +15,11 @@ package object scharpa {
     /**
      * DCG notation for terminal (lexical) rules
      */
-    def -->(rhs: String*): SimpleRule = SimpleRule(this, rhs.head, rhs.tail.map(string2leaf): _*)
+    def -->(rhsHead: String, rhs: String*): SimpleRule = SimpleRule(this, rhsHead, rhs.map(string2leaf): _*)
     /**
      * DCG notation for non-terminal rules
      */
-    def ==>(rhs: Symbol*): SimpleRule = SimpleRule(this, rhs.head, rhs.tail.map(sym2nonTerm): _*)
+    def ==>(rhsHead: Symbol, rhs: Symbol*): SimpleRule = SimpleRule(this, rhsHead, rhs.map(sym2nonTerm): _*)
   }
 
   // implicits for making rule forms easier
