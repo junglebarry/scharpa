@@ -4,17 +4,34 @@ import org.scalatest._
 
 class SimpleChartParserSpec extends FlatSpec with Matchers {
 
+  "DCG notation" should "use ==> to encode non-terminal rules" in {
+    val a: SimpleRule = 'A ==> 'B
+    a should be(SimpleRule('A, 'B))
+
+    val s: SimpleRule = 'S ==> ('NP, 'VP)
+    s should be(SimpleRule('S, 'NP, 'VP))
+  }
+
+  it should "use --> to encode terminal (lexical) rules" in {
+    val cheese: SimpleRule = 'Item --> "CHEESE"
+    cheese should be(SimpleRule('Item, "CHEESE"))
+
+    val montereyJack: SimpleRule = 'Item --> ("MONTEREY", "JACK")
+    montereyJack should be(SimpleRule('Item, "MONTEREY", "JACK"))
+  }
+
   "Rule.nextSymbol" should "be the first symbol on the RHS" in new SimpleGrammar {
-    the.nextSymbol should be(Some("the"))
-    cat.nextSymbol should be(Some("cat"))
-    s1.nextSymbol should be(Some("NP"))
+    the.nextSymbol should be(Some(Leaf("the")))
+    cat.nextSymbol should be(Some(Leaf("cat")))
+    cat.nextSymbol should not be (Some(NonTerm('cat)))
+    s1.nextSymbol should be(Some(NonTerm('NP)))
   }
 
   "Rule.nextSymbolIs" should "be true only for the first symbol on the RHS" in new SimpleGrammar {
     the.nextSymbolIs("the") should be(true)
     the.nextSymbolIs("cat") should be(false)
-    s1.nextSymbolIs("NP") should be(true)
-    s1.nextSymbolIs("S") should be(false)
+    s1.nextSymbolIs('NP) should be(true)
+    s1.nextSymbolIs('S) should be(false)
   }
 
   "WordArc" should "always be passive" in {
@@ -340,25 +357,25 @@ trait SimpleGrammar {
   val wordSat = WordArc(2, 3, "sat")
 
   // rules
-  val the = SimpleRule("Det", "the")
-  val cat = SimpleRule("N", "cat")
-  val dog = SimpleRule("N", "dog")
-  val sheep = SimpleRule("N", "sheep")
-  val sheepdog = SimpleRule("N", "sheep", "dog")
-  val mat = SimpleRule("N", "mat")
-  val sat = SimpleRule("V", "sat")
-  val ate = SimpleRule("V", "ate")
-  val on = SimpleRule("P", "on")
-  val pp = SimpleRule("PP", "P", "NP")
-  val np = SimpleRule("NP", "Det", "N")
-  val tvp = SimpleRule("VP", "V", "NP")
-  val ivp = SimpleRule("VP", "V")
-  val s1 = SimpleRule("S", "NP", "VP")
-  val s2 = SimpleRule("S", "NP", "VP", "PP")
+  val the = 'Det --> "the"
+  val cat = 'N --> "cat"
+  val dog = 'N --> "dog"
+  val sheep = 'N --> "sheep"
+  val sheepdog = 'N --> ("sheep", "dog")
+  val mat = 'N --> "mat"
+  val sat = 'V --> "sat"
+  val ate = 'V --> "ate"
+  val on = 'P --> "on"
+  val pp = 'PP ==> ('P, 'NP)
+  val np = 'NP ==> ('Det, 'N)
+  val tvp = 'VP ==> ('V, 'NP)
+  val ivp = 'VP ==> 'V
+  val s1 = 'S ==> ('NP, 'VP)
+  val s2 = 'S ==> ('NP, 'VP, 'PP)
 
   // grammar
   val rules = Set[Rule](the, cat, dog, sheep, sheepdog, mat, sat, ate, on, pp, np, tvp, ivp, s1, s2)
-  val top = TopRule("S")
+  val top = TopRule('S)
   val grammar = new Grammar(rules, top)
 }
 

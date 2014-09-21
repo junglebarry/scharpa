@@ -4,40 +4,62 @@ import scala.annotation.tailrec
 
 package object scharpa {
 
-  trait HasRHS {
-    def nextSymbol: Option[String]
+  // Sym represents a symbol in the grammar, either a leaf or a non-terminal
+  sealed trait Sym {}
+  case class Leaf(symbol: String) extends Sym {
+    override def toString = symbol
+  }
+  case class NonTerm(symbol: Symbol) extends Sym {
+    override def toString = symbol.name
 
-    def nextSymbolIs(symbol: String): Boolean = { nextSymbol.exists(_ == symbol) }
+    /**
+     * DCG notation for terminal (lexical) rules
+     */
+    def -->(rhs: String*): SimpleRule = SimpleRule(this, rhs.head, rhs.tail.map(string2leaf): _*)
+    /**
+     * DCG notation for non-terminal rules
+     */
+    def ==>(rhs: Symbol*): SimpleRule = SimpleRule(this, rhs.head, rhs.tail.map(sym2nonTerm): _*)
+  }
+
+  // implicits for making rule forms easier
+  implicit def string2leaf(string: String): Leaf = Leaf(string)
+  implicit def sym2nonTerm(symbol: Symbol): NonTerm = NonTerm(symbol)
+
+  trait HasRHS {
+    def nextSymbol: Option[Sym]
+
+    def nextSymbolIs(symbol: Sym): Boolean = { nextSymbol.exists(_ == symbol) }
   }
 
   sealed trait Rule extends HasRHS {
-    def lhs: String
-    def rhs: Seq[String]
+    def lhs: NonTerm
+    def rhs: Seq[Sym]
   }
 
   /**
    * The TopRule is a single rule singled out as the topmost node of the grammar.
    */
-  case class TopRule(rhsOnly: String, topSymbol: String = "ROOT") extends Rule {
+  case class TopRule(rhsOnly: NonTerm, topSymbol: NonTerm = 'ROOT) extends Rule {
     override val lhs = topSymbol
-    lazy val rhs: Seq[String] = Seq(rhsOnly)
-    override lazy val nextSymbol: Option[String] = rhs.headOption
+    lazy val rhs: Seq[Sym] = Seq(rhsOnly)
+    override lazy val nextSymbol: Option[Sym] = rhs.headOption
   }
 
   /**
    * Rules are context-free grammar rules, which have a single left-hand-side entry,
    * and expand to one or more right-hand-side entries (enforced by type).
    */
-  case class SimpleRule(lhs: String, rhsHead: String, rhsTail: String*) extends Rule {
-    lazy val rhs: Seq[String] = rhsHead +: rhsTail.toSeq
-    override lazy val nextSymbol: Option[String] = rhs.headOption
+  case class SimpleRule(lhs: NonTerm, rhsHead: Sym, rhsTail: Sym*) extends Rule {
+    lazy val rhs: Seq[Sym] = rhsHead +: rhsTail.toSeq
+    override lazy val nextSymbol: Option[Sym] = rhs.headOption
   }
 
   /** A grammar is a set of rules, with an optional Top rule (for top-down traversal) **/
   case class Grammar(ruleset: Set[Rule], top: TopRule) {
     lazy val rules: Set[Rule] = ruleset + top
-    lazy val rulesByLhs: Map[String, Set[Rule]] = rules.groupBy(_.lhs)
-    lazy val rulesByFirstRhs: Map[String, Set[Rule]] = rules.filter(_.nextSymbol.isDefined).groupBy(_.nextSymbol.get)
+    lazy val rulesByLhs: Map[Sym, Set[Rule]] = rules.groupBy(_.lhs)
+    lazy val rulesByFirstRhs: Map[Sym, Set[Rule]] = rules.filter(_.nextSymbol.isDefined).groupBy(_.nextSymbol.get)
   }
 
   /**
@@ -49,7 +71,7 @@ package object scharpa {
 
     lazy val (seen, remaining) = rule.rhs.splitAt(applied)
 
-    override lazy val nextSymbol: Option[String] = remaining.headOption
+    override lazy val nextSymbol: Option[Sym] = remaining.headOption
 
     def extendWith(arc: Arc): Option[RuleApplication] = if (nextSymbolIs(arc.symbol)) {
       Some(RuleApplication(rule, subarcs :+ arc, applied + 1))
@@ -68,7 +90,7 @@ package object scharpa {
   sealed trait Arc {
     def start: Int
     def end: Int
-    def symbol: String
+    def symbol: Sym
     def active: Boolean
     def applyFundamental(arc: Arc): Option[Arc]
   }
@@ -80,7 +102,7 @@ package object scharpa {
   case class WordArc(
       override val start: Int,
       override val end: Int,
-      override val symbol: String) extends Arc {
+      override val symbol: Sym) extends Arc {
     /** WordArcs are always passive, as they cover one word. **/
     override val active: Boolean = false
     /** WordArcs are always passive, so cannot be extended through fundamental rule **/
@@ -165,11 +187,11 @@ package object scharpa {
     def readout(arc: Arc): String = arc match {
       case ra: RuleArc =>
         s"""(${ra.symbol} ${ra.rule.subarcs.map(readout(_)).mkString(" ")})"""
-      case a => a.symbol
+      case a => a.symbol.toString
     }
 
     /** Select all active nodes, filtered by symbol **/
-    def passiveNodes(chart: Chart, symbol: String): Set[Arc] = {
+    def passiveNodes(chart: Chart, symbol: NonTerm): Set[Arc] = {
       chart.arcs.filter { arc => arc.symbol == symbol && !arc.active }
     }
   }
@@ -179,7 +201,7 @@ package object scharpa {
    */
   trait BottomUpChartParser extends ChartParser {
     /** Initialise the agenda with one WordArc for each word in the sentence **/
-    def initialise(grammar: Grammar)(sentence: Seq[String]): ParserState = {
+    override def initialise(grammar: Grammar)(sentence: Seq[String]): ParserState = {
       val agenda = sentence.zipWithIndex.map {
         case (word, index) => WordArc(index, index + 1, word)
       }
@@ -190,7 +212,7 @@ package object scharpa {
      * New arcs are generated bottom-up:
      * grammar rules are selected if their first RHS symbol is that required by the Arc.
      */
-    def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = if (!arc.active) {
+    override def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = if (!arc.active) {
       grammar.rulesByFirstRhs.get(arc.symbol).getOrElse(Set.empty[Rule]).flatMap { rule =>
         RuleArc(arc.start, arc.start, RuleApplication(rule)).applyFundamental(arc)
       }
@@ -202,7 +224,7 @@ package object scharpa {
    */
   trait TopDownChartParser extends ChartParser {
     /** Initialise the agenda with one RuleArc for the top symbol **/
-    def initialise(grammar: Grammar)(sentence: Seq[String]): ParserState = {
+    override def initialise(grammar: Grammar)(sentence: Seq[String]): ParserState = {
       // all words to be added to the chart
       val chartWordArcs: Set[Arc] = sentence.zipWithIndex.map {
         case (word, index) => WordArc(index, index + 1, word)
@@ -216,7 +238,7 @@ package object scharpa {
      * New arcs are generated top-down:
      * grammar rules are selected if their LHS symbol is the next symbol for the Arc.
      */
-    def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = arc match {
+    override def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = arc match {
       // only active arcs can be extended into new Arcs
       case RuleArc(start, end, rule) if rule.active =>
         grammar.rulesByLhs.get(rule.nextSymbol.get).getOrElse(Set.empty[Rule]).map { rule =>
@@ -228,12 +250,12 @@ package object scharpa {
 
   /** Breadth-first - it's a queue **/
   trait BreadthFirstChartParser extends ChartParser {
-    def nextAgenda(old: Seq[Arc], newArcs: Seq[Arc]) = old ++ newArcs
+    override def nextAgenda(old: Seq[Arc], newArcs: Seq[Arc]) = old ++ newArcs
   }
 
   /** Depth-first - it's a stack **/
   trait DepthFirstChartParser extends ChartParser {
-    def nextAgenda(old: Seq[Arc], newArcs: Seq[Arc]) = newArcs ++ old
+    override def nextAgenda(old: Seq[Arc], newArcs: Seq[Arc]) = newArcs ++ old
   }
 
   trait BFBUChartParser extends BottomUpChartParser with BreadthFirstChartParser
