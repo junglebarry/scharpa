@@ -26,10 +26,14 @@ package object scharpa {
   implicit def string2leaf(string: String): Leaf = Leaf(string)
   implicit def sym2nonTerm(symbol: Symbol): NonTerm = NonTerm(symbol)
 
-  trait HasRHS {
+  trait HasNextSymbol {
+    def nextSymbolIs(symbol: Sym): Boolean
+  }
+
+  trait HasRHS extends HasNextSymbol {
     def nextSymbol: Option[Sym]
 
-    def nextSymbolIs(symbol: Sym): Boolean = { nextSymbol.exists(_ == symbol) }
+    override def nextSymbolIs(symbol: Sym): Boolean = { nextSymbol.exists(_ == symbol) }
   }
 
   sealed trait Rule extends HasRHS {
@@ -60,6 +64,11 @@ package object scharpa {
     lazy val rules: Set[Rule] = ruleset + top
     lazy val rulesByLhs: Map[Sym, Set[Rule]] = rules.groupBy(_.lhs)
     lazy val rulesByFirstRhs: Map[Sym, Set[Rule]] = rules.filter(_.nextSymbol.isDefined).groupBy(_.nextSymbol.get)
+
+    /** Find rules that start with a given symbol **/
+    def rulesThatStartWith(sym: Sym): Set[Rule] = rulesByFirstRhs.get(sym).getOrElse(Set.empty[Rule])
+
+    def rulesThatExpand(sym: Sym): Set[Rule] = rulesByLhs.get(sym).getOrElse(Set.empty[Rule])
   }
 
   /**
@@ -213,7 +222,7 @@ package object scharpa {
      * grammar rules are selected if their first RHS symbol is that required by the Arc.
      */
     override def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = if (!arc.active) {
-      grammar.rulesByFirstRhs.get(arc.symbol).getOrElse(Set.empty[Rule]).flatMap { rule =>
+      grammar.rulesThatStartWith(arc.symbol).flatMap { rule =>
         RuleArc(arc.start, arc.start, RuleApplication(rule)).applyFundamental(arc)
       }
     } else { Set.empty[Arc] }
@@ -241,7 +250,7 @@ package object scharpa {
     override def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = arc match {
       // only active arcs can be extended into new Arcs
       case RuleArc(start, end, rule) if rule.active =>
-        grammar.rulesByLhs.get(rule.nextSymbol.get).getOrElse(Set.empty[Rule]).map { rule =>
+        grammar.rulesThatExpand(rule.nextSymbol.get).map { rule =>
           RuleArc(end, end, RuleApplication(rule))
         }
       case _ => Set.empty[Arc]
