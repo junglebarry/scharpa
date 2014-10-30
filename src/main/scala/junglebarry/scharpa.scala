@@ -59,14 +59,42 @@ package object scharpa {
     override lazy val nextSymbol: Option[Sym] = rhs.headOption
   }
 
+  /** Generator for Rules from data, so the grammar can contain patterns for generating rules **/
+  trait RuleGenerator extends HasNextSymbol {
+    def ruleFor(sym: Sym): Rule
+  }
+
+  /**
+   * Simple RuleGenerator based on a regular expression, which, if it matches, generates
+   * a SimpleRule with a given LHS and the matching Sym as the sole RHS member.
+   */
+  case class RegexRuleGenerator(lhs: NonTerm, regex: String) extends RuleGenerator {
+    private lazy val Rx = regex.r
+    override def nextSymbolIs(symbol: Sym): Boolean = symbol match {
+      case Leaf(Rx(_*)) => true
+      case _ => false
+    }
+    override def ruleFor(sym: Sym): Rule = SimpleRule(lhs, sym)
+  }
+
   /** A grammar is a set of rules, with an optional Top rule (for top-down traversal) **/
-  case class Grammar(ruleset: Set[Rule], top: TopRule) {
+  case class Grammar(ruleset: Set[Rule], top: TopRule, generators: Set[RuleGenerator] = Set.empty[RuleGenerator]) {
     lazy val rules: Set[Rule] = ruleset + top
     lazy val rulesByLhs: Map[Sym, Set[Rule]] = rules.groupBy(_.lhs)
     lazy val rulesByFirstRhs: Map[Sym, Set[Rule]] = rules.filter(_.nextSymbol.isDefined).groupBy(_.nextSymbol.get)
 
+    private lazy val generatorSeq: Seq[RuleGenerator] = generators.toSeq
+
+    def applyGenerators(sym: Sym): Set[Rule] = {
+      generatorSeq.filter(_.nextSymbolIs(sym)).map(_.ruleFor(sym)).toSet
+    }
+
     /** Find rules that start with a given symbol **/
-    def rulesThatStartWith(sym: Sym): Set[Rule] = rulesByFirstRhs.get(sym).getOrElse(Set.empty[Rule])
+    def rulesWhoseRhsStartsWith(sym: Sym): Set[Rule] = {
+      val cached = rulesByFirstRhs.get(sym)
+      val generated = applyGenerators(sym)
+      cached.getOrElse(Set.empty[Rule]) ++ generated
+    }
 
     def rulesThatExpand(sym: Sym): Set[Rule] = rulesByLhs.get(sym).getOrElse(Set.empty[Rule])
   }
@@ -222,7 +250,7 @@ package object scharpa {
      * grammar rules are selected if their first RHS symbol is that required by the Arc.
      */
     override def generateNewArcs(grammar: Grammar)(arc: Arc): Set[Arc] = if (!arc.active) {
-      grammar.rulesThatStartWith(arc.symbol).flatMap { rule =>
+      grammar.rulesWhoseRhsStartsWith(arc.symbol).flatMap { rule =>
         RuleArc(arc.start, arc.start, RuleApplication(rule)).applyFundamental(arc)
       }
     } else { Set.empty[Arc] }

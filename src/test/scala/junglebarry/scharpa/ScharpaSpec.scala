@@ -20,6 +20,23 @@ class SimpleChartParserSpec extends FlatSpec with Matchers {
     montereyJack should be(SimpleRule('Item, "MONTEREY", "JACK"))
   }
 
+  "RegexRuleGenerator" should "generate rules matching regular expressions" in {
+    val rrg = RegexRuleGenerator('Number, """^(\d+(\.\d+)?)|(\d+\s*((\d+/\d+)|[½¼¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]))$""")
+    rrg.nextSymbolIs("123") should be(true)
+    rrg.ruleFor("123") should be(SimpleRule('Number, "123"))
+    rrg.nextSymbolIs("123.456") should be(true)
+    rrg.ruleFor("123.456") should be(SimpleRule('Number, "123.456"))
+    rrg.nextSymbolIs("1 1/2") should be(true)
+    rrg.ruleFor("1 1/2") should be(SimpleRule('Number, "1 1/2"))
+    rrg.nextSymbolIs("1½") should be(true)
+    rrg.ruleFor("1½") should be(SimpleRule('Number, "1½"))
+    rrg.nextSymbolIs("1 ½") should be(true)
+    rrg.ruleFor("1 ½") should be(SimpleRule('Number, "1 ½"))
+
+    rrg.nextSymbolIs("abc") should be(false)
+    rrg.nextSymbolIs("123 123") should be(false)
+  }
+
   "Rule.nextSymbol" should "be the first symbol on the RHS" in new SimpleGrammar {
     the.nextSymbol should be(Some(Leaf("the")))
     cat.nextSymbol should be(Some(Leaf("cat")))
@@ -340,6 +357,23 @@ class SimpleChartParserSpec extends FlatSpec with Matchers {
     end should be(3)
     sym should be(top)
   }
+
+  "RuleGenerators" should "also be included in coverage" in new ExtendedGrammar with BottomUpBreadthFirst {
+    val chart1 = parser.parse(grammar)(Seq("100", "cats", "sat"))
+    chart1.arcs should (
+      be('nonEmpty) and
+      contain(WordArc(0, 1, "100")) and
+      contain(WordArc(1, 2, "cats")) and
+      contain(WordArc(2, 3, "sat"))
+    )
+    val chart2 = parser.parse(grammar)(Seq("123534235", "cats", "sat"))
+    chart2.arcs should (
+      be('nonEmpty) and
+      contain(WordArc(0, 1, "123534235")) and
+      contain(WordArc(1, 2, "cats")) and
+      contain(WordArc(2, 3, "sat"))
+    )
+  }
 }
 
 trait BottomUpBreadthFirst {
@@ -385,4 +419,18 @@ trait TheCatSatBFBU extends SimpleGrammar with BottomUpBreadthFirst {
 
 trait TheCatSatDFTD extends SimpleGrammar with TopDownDepthFirst {
   val chart: Chart = parser.parse(grammar)(Seq("the", "cat", "sat"))
+}
+
+trait ExtendedGrammar {
+  // rules
+  val cats = 'N --> "cats"
+  val sat = 'V --> "sat"
+  val np = 'NP ==> ('Number, 'N)
+  val ivp = 'VP ==> 'V
+  val s1 = 'S ==> ('NP, 'VP)
+
+  // grammar
+  val rules = Set[Rule](cats, sat, np, ivp, s1)
+  val top = TopRule('S)
+  val grammar = new Grammar(rules, top, Set(RegexRuleGenerator('Number, "^\\d+$")))
 }
