@@ -12,7 +12,7 @@ Scharpa is not intended as a wide-coverage, robust, or high-performance parser; 
 Parsing is the process of deriving a phrase-structure analysis of some input text according to a given grammar. This project considers only context-free grammars, with rules in [Backus-Naur Form]( http://en.wikipedia.org/wiki/Backus%E2%80%93Naur_Form):
 
 ```Prolog
-LHS -> RHS1, RHS2, ..., RHSn
+LHS --> RHS1, RHS2, ..., RHSn
 ```
 
 Here, there is a single symbol on the left-hand side (LHS) that can be expanded into a (non-empty) sequence of symbols on the right-hand side (RHS). Each `RHSi` from the right-hand side can act as the left-hand-side of another rule in the grammar.
@@ -20,12 +20,12 @@ Here, there is a single symbol on the left-hand side (LHS) that can be expanded 
 A prototypical example of such a grammar is:
 
 ```Prolog
-S -> NP VP
-NP -> DET N
-DET -> "the"
-N -> "cat"
-VP -> V
-V -> "sat"
+S --> NP VP
+NP --> DET N
+DET --> "the"
+N --> "cat"
+VP --> V
+V --> "sat"
 ```
 
 and parsing the sentence "the cat sat" would yield the following phrase-structure analysis (warning: S-expressions follow):
@@ -34,11 +34,13 @@ and parsing the sentence "the cat sat" would yield the following phrase-structur
 (S (NP (DET "the") (N "cat")) (VP (V "sat")))
 ```
 
+The convention here is that words -- or "leaf" nodes -- are represented as double-quoted strings, and appear exclusively in the RHS of rules. The remaining nodes are "non-terminals", which appear on both the RHS and LHS of grammar rules.
+
 Parsing can be viewed as a search through the space of possible analyses for the one (or many) that best explain the observed sentence. Of course, it's entirely possible that the given grammar doesn't describe what might intuitively appear to be a perfectly valid sentence.
 
 The *parsing as search* viewpoint is important for what follows. There are a few reasons of particular relevance here.
 
-First, context-free grammars allow recursive rules of the form `A -> A B`, which could cause a naïve top-down search to enter infinite [left recursion](http://en.wikipedia.org/wiki/Left_recursion).
+First, context-free grammars allow recursive rules of the form `A --> A B`, which could cause a naïve top-down search to enter infinite [left recursion](http://en.wikipedia.org/wiki/Left_recursion).
 
 Second, a common mechanism for searching through a space of possibilities is to use backtracking to consider alternative expansions, which can lead to wasteful recomputation.
 
@@ -133,6 +135,46 @@ See [the tests](https://github.com/junglebarry/scharpa/blob/master/src/test/scal
   chart.chart.foreach(println)
   println("======================")
 ```
+
+## [Definite Clause Grammar](http://en.wikipedia.org/wiki/Definite_clause_grammar) (DCG) Notation
+
+DCG notation is a short-hand for grammar construction used in Prolog. 
+
+Scharpa provides two DCG shortcuts that are Prolog-inspired:
+
+### RHS comprises only terminal nodes
+
+```scala
+'V --> "sat"                 // translated: SimpleRule(NonTerm('V), Leaf("sat"))
+'N --> "cat"                 // translated: SimpleRule(NonTerm('N), Leaf("cat"))
+'N --> ("cat")               // translated: SimpleRule(NonTerm('N), Leaf("cat"))
+'N --> ("Granny", "Smith")   // translated: SimpleRule(NonTerm('N), Leaf("Granny"), Leaf("Smith"))
+```
+
+### RHS comprises only non-terminal nodes
+
+```scala
+'S ==> ('NP, 'VP)    // translated: SimpleRule(NonTerm('S), NonTerm('NP), NonTerm('VP))
+'NP ==> ('Det, 'N)   // translated: SimpleRule(NonTerm('NP), NonTerm('Det), NonTerm('N))
+'NP ==> 'N           // translated: SimpleRule(NonTerm('NP), NonTerm('N))
+'NP ==> ('N)         // translated: SimpleRule(NonTerm('NP), NonTerm('N))
+'VP ==> 'V           // translated: SimpleRule(NonTerm('VP), NonTerm('V))
+```
+
+### RHS contains both leaf and non-terminal nodes
+
+You're on your own: use `SimpleRule` directly.
+
+See [the tests](https://github.com/junglebarry/scharpa/blob/master/src/test/scala/junglebarry/scharpa/SimpleChartParserSpec.scala) for more examples of DCG notation.
+
+
+## `RuleGenerator`s
+
+Sometimes, it's overkill to specify lots of grammar rules for broad classes of `String`s that could be better described by a pattern of some kind. An example might be numbers, which can be compactly described by regular expressions. Scharpa provides a little help for you here, in the form of `RuleGenerator`s.
+
+A `RuleGenerator` can be used to 
+
+This flexibility comes at a price, however, and `RuleGenrator`s should be used with caution. If the symbols and rules of the grammar are known in advance, it is possible to make certain optimisations for rule-lookup, but these optimisations do not apply in the more general case of rule-generation. You have been warned...
 
 ## References
 
