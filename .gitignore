@@ -8,3 +8,4 @@ logs/
 bin/
 tmp/
 .vagrant
+.idea/
