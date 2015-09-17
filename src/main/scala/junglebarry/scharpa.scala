@@ -33,7 +33,7 @@ package object scharpa {
   trait HasRHS extends HasNextSymbol {
     def nextSymbol: Option[Sym]
 
-    override def nextSymbolIs(symbol: Sym): Boolean = { nextSymbol.exists(_ == symbol) }
+    override def nextSymbolIs(symbol: Sym): Boolean = { nextSymbol.contains(symbol) }
   }
 
   sealed trait Rule extends HasRHS {
@@ -46,8 +46,8 @@ package object scharpa {
    */
   case class TopRule(rhsOnly: NonTerm, topSymbol: NonTerm = 'ROOT) extends Rule {
     override val lhs = topSymbol
-    lazy val rhs: Seq[Sym] = Seq(rhsOnly)
-    override lazy val nextSymbol: Option[Sym] = rhs.headOption
+    val rhs: Seq[Sym] = Seq(rhsOnly)
+    override val nextSymbol: Option[Sym] = Some(rhsOnly)
   }
 
   /**
@@ -55,8 +55,8 @@ package object scharpa {
    * and expand to one or more right-hand-side entries (enforced by type).
    */
   case class SimpleRule(lhs: NonTerm, rhsHead: Sym, rhsTail: Sym*) extends Rule {
-    lazy val rhs: Seq[Sym] = rhsHead +: rhsTail.toSeq
-    override lazy val nextSymbol: Option[Sym] = rhs.headOption
+    val rhs: Seq[Sym] = rhsHead +: rhsTail.toSeq
+    override val nextSymbol: Option[Sym] = Some(rhsHead)
   }
 
   /** Generator for Rules from data, so the grammar can contain patterns for generating rules **/
@@ -86,7 +86,7 @@ package object scharpa {
     private lazy val generatorSeq: Seq[RuleGenerator] = generators.toSeq
 
     def applyGenerators(sym: Sym): Set[Rule] = {
-      generatorSeq.filter(_.nextSymbolIs(sym)).map(_.ruleFor(sym)).toSet
+      generatorSeq.withFilter(_.nextSymbolIs(sym)).map(_.ruleFor(sym))(collection.breakOut)
     }
 
     /** Find rules that start with a given symbol **/
@@ -96,7 +96,7 @@ package object scharpa {
       cached.getOrElse(Set.empty[Rule]) ++ generated
     }
 
-    def rulesThatExpand(sym: Sym): Set[Rule] = rulesByLhs.get(sym).getOrElse(Set.empty[Rule])
+    def rulesThatExpand(sym: Sym): Set[Rule] = rulesByLhs.getOrElse(sym, Set.empty[Rule])
   }
 
   /**
@@ -104,11 +104,11 @@ package object scharpa {
    * symbols from the RHS have been successfully applied already.
    */
   case class RuleApplication(rule: Rule, subarcs: Seq[Arc] = Seq.empty[Arc], applied: Int = 0) extends HasRHS {
-    lazy val active: Boolean = rule.rhs.size > applied
+    val active: Boolean = rule.rhs.size > applied
 
-    lazy val (seen, remaining) = rule.rhs.splitAt(applied)
+    val (seen, remaining) = rule.rhs.splitAt(applied)
 
-    override lazy val nextSymbol: Option[Sym] = remaining.headOption
+    override val nextSymbol: Option[Sym] = remaining.headOption
 
     def extendWith(arc: Arc): Option[RuleApplication] = if (nextSymbolIs(arc.symbol)) {
       Some(RuleApplication(rule, subarcs :+ arc, applied + 1))
@@ -167,20 +167,20 @@ package object scharpa {
   }
 
   case class Chart(arcs: Set[Arc], sentence: Seq[String]) {
-    def nextChart(arc: Arc): (Chart, Seq[Arc]) = {
+    def nextChart(arc: Arc): (Chart, Set[Arc]) = {
       if (arcs(arc)) {
-        (this, Seq.empty[Arc])
+        (this, Set.empty[Arc])
       } else {
-        val fundamentals =
+        val fundamentals: Set[Arc] =
           if (arc.active) {
             // new arc active; attempt to extend with passive rules on chart
-            arcs.filterNot(_.active).flatMap(arc.applyFundamental(_))
+            arcs.withFilter(a => !a.active).flatMap(arc.applyFundamental)
           } else {
             // new arc passive; attempt to extend any active rules from chart with new arc
-            arcs.filter(_.active).flatMap(_.applyFundamental(arc))
+            arcs.withFilter(_.active).flatMap(_.applyFundamental(arc))
           }
         // return chart with new arc added; also, new arcs to be added to next agenda
-        (Chart(arcs + arc, sentence), fundamentals.toSeq)
+        (Chart(arcs + arc, sentence), fundamentals)
       }
     }
   }
@@ -205,7 +205,7 @@ package object scharpa {
         // arcs from new rules
         val newArcs = generateNewArcs(grammar)(arc)
         // generate the next agenda
-        val newAgenda = nextAgenda(arcs, (extendedArcs ++ newArcs).distinct)
+        val newAgenda = nextAgenda(arcs, (extendedArcs ++ newArcs).toSeq)
         // recurse
         extend(ParserState(newAgenda, newChart), grammar)
     }
@@ -223,7 +223,7 @@ package object scharpa {
     /** Generate an S-expression readout of the phrase-structure **/
     def readout(arc: Arc): String = arc match {
       case ra: RuleArc =>
-        s"""(${ra.symbol} ${ra.rule.subarcs.map(readout(_)).mkString(" ")})"""
+        s"""(${ra.symbol} ${ra.rule.subarcs.map(readout).mkString(" ")})"""
       case a => a.symbol.toString
     }
 
@@ -265,7 +265,7 @@ package object scharpa {
       // all words to be added to the chart
       val chartWordArcs: Set[Arc] = sentence.zipWithIndex.map {
         case (word, index) => WordArc(index, index + 1, word)
-      }.toSet
+      }(collection.breakOut)
       // top-down starting rule added to agenda
       val agenda = Seq(RuleArc(0, 0, RuleApplication(grammar.top)))
       ParserState(agenda, Chart(chartWordArcs, sentence))
