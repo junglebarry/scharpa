@@ -4,7 +4,7 @@ version := "0.5"
 
 scalaVersion := "2.11.7"
 
-crossScalaVersions := Seq("2.11.7", "2.10.5")
+crossScalaVersions := Seq("2.11.7")
 
 scalariformSettings
 
